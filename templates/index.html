@@ -88,7 +88,7 @@ function speak(text) {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'en-GB'; // Prioritize British English
   utter.rate = 1.10;    // Slightly slower for natural flow
-  utter.pitch = 1.03;   // Slightly higher for warmth
+  utter.pitch = 0.94;   // Slightly higher for warmth
   utter.volume = 1;     // Full volume
 
   function setVoiceAndSpeak() {
