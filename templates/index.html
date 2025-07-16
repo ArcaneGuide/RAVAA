@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ravaa Chatbot</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; max-width: 700px; }
+    #chat { border: 1px solid #ccc; padding: 1em; height: 300px; overflow-y: auto; background: #f9f9f9; }
+    #userInput { width: 100%; padding: 0.5em; font-size: 1em; }
+    button { margin-top: 0.5em; padding: 0.6em 1em; font-size: 1em; cursor: pointer; }
+    .user { color: #0055cc; margin: 0.3em 0; }
+    .bot { color: #228822; margin: 0.3em 0; }
+    .cmd-btns button { margin-right: 0.5em; margin-bottom: 0.5em; }
+    textarea { width: 100%; height: 120px; margin-top: 0.5em; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>Ravaa: Your AI Companion</h1>
+
+  <div id="chat"></div>
+
+  <input type="text" id="userInput" placeholder="Say something..." />
+  <button id="sendBtn">Send</button>
+  <button id="micBtn">🎤 Speak</button>
+
+  <hr>
+  <h3>Functions:</h3>
+  <div class="cmd-btns">
+    <button id="rpsBtn">Play Rock Paper Scissors</button>
+    <button id="diceRollBtn">Roll Dice</button>
+    <button id="searchBtn">Search Wikipedia</button>
+    <button id="setAlarmBtn">Set Alarm</button>
+    <button id="lieDetectorBtn">Lie Detector</button>
+  </div>
+
+  <!-- Rock Paper Scissors -->
+  <div id="rpsControls" class="hidden">
+    <p>Choose:</p>
+    <button data-choice="rock">🪨 Rock</button>
+    <button data-choice="paper">📄 Paper</button>
+    <button data-choice="scissors">✂️ Scissors</button>
+  </div>
+
+  <!-- Dice roll is automatic (no controls needed) -->
+
+  <!-- Search Wikipedia -->
+  <div id="searchControls" class="hidden">
+    <input type="text" id="searchInput" placeholder="Search topic..." />
+    <button id="runSearchBtn">Search</button>
+  </div>
+
+  <!-- Set Alarm -->
+  <div id="setAlarmControls" class="hidden">
+    <input type="number" id="alarmMinutes" placeholder="Minutes" />
+    <input type="text" id="alarmMessage" placeholder="Reminder message" />
+    <button id="runSetAlarmBtn">Set Alarm</button>
+  </div>
+
+  <!-- Lie Detector -->
+  <div id="lieDetectorControls" class="hidden">
+    <p>Paste conversation (JSON array of {"speaker": "", "message": ""}):</p>
+    <textarea id="lieInput" placeholder='[{"speaker": "Alice", "message": "Maybe I did."}]'></textarea>
+    <button id="runLieDetectorBtn">Analyze</button>
+  </div>
+
+<script>
+  const chatDiv = document.getElementById('chat');
+  const input = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const micBtn = document.getElementById('micBtn');
+
+  const rpsBtn = document.getElementById('rpsBtn');
+  const diceRollBtn = document.getElementById('diceRollBtn');
+  const searchBtn = document.getElementById('searchBtn');
+  const setAlarmBtn = document.getElementById('setAlarmBtn');
+  const lieDetectorBtn = document.getElementById('lieDetectorBtn');
+
+  const rpsControls = document.getElementById('rpsControls');
+  const searchControls = document.getElementById('searchControls');
+  const setAlarmControls = document.getElementById('setAlarmControls');
+  const lieDetectorControls = document.getElementById('lieDetectorControls');
+
+  
+function speak(text) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'en-GB'; // British English
+
+  function setVoiceAndSpeak() {
+    const voices = speechSynthesis.getVoices();
+
+    // Look for a British female voice
+    const britVoice = voices.find(voice =>
+      voice.lang === 'en-GB' &&
+      /female|woman|girl|karen|libby|serena|amy|emma|en-gb/i.test(voice.name)
+    );
+
+    if (britVoice) {
+      utter.voice = britVoice;
+    } else {
+      console.warn("British feminine voice not found. Using default.");
+    }
+
+    speechSynthesis.speak(utter);
+  }
+
+  if (speechSynthesis.getVoices().length === 0) {
+    speechSynthesis.onvoiceschanged = () => {
+      setVoiceAndSpeak();
+    };
+  } else {
+    setVoiceAndSpeak();
+  }
+}
+
+  function appendMessage(sender, text) {
+    const p = document.createElement('p');
+    p.className = sender;
+    p.textContent = sender === 'user' ? `You: ${text}` : `Ravaa: ${text}`;
+    chatDiv.appendChild(p);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+    if (sender === 'bot') speak(text);
+  }
+
+  function hideAllControls() {
+    rpsControls.classList.add('hidden');
+    searchControls.classList.add('hidden');
+    setAlarmControls.classList.add('hidden');
+    lieDetectorControls.classList.add('hidden');
+  }
+
+  function sendChatMessage(message) {
+    appendMessage('user', message);
+    fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    })
+    .then(res => res.json())
+    .then(data => appendMessage('bot', data.response))
+    .catch(() => appendMessage('bot', 'Error communicating with server.'));
+  }
+
+  sendBtn.onclick = () => {
+    const message = input.value.trim();
+    if (!message) return;
+    hideAllControls();
+    sendChatMessage(message);
+    input.value = '';
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
+
+  // Speech-to-text
+  if ('webkitSpeechRecognition' in window) {
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = function(event) {
+      const transcript = event.results[0][0].transcript;
+      input.value = transcript;
+      sendBtn.click();
+    };
+
+    recognition.onerror = function(event) {
+      alert("Speech recognition error: " + event.error);
+    };
+
+    micBtn.onclick = () => recognition.start();
+  } else {
+    micBtn.disabled = true;
+    alert("Speech recognition not supported in your browser.");
+  }
+
+  // Functional Buttons
+  rpsBtn.onclick = () => {
+    hideAllControls();
+    rpsControls.classList.remove('hidden');
+  };
+
+  diceRollBtn.onclick = () => {
+    hideAllControls();
+    sendChatMessage('dice roll');
+  };
+
+  searchBtn.onclick = () => {
+    hideAllControls();
+    searchControls.classList.remove('hidden');
+  };
+
+  setAlarmBtn.onclick = () => {
+    hideAllControls();
+    setAlarmControls.classList.remove('hidden');
+  };
+
+  lieDetectorBtn.onclick = () => {
+    hideAllControls();
+    lieDetectorControls.classList.remove('hidden');
+  };
+
+  // Rock Paper Scissors game
+  rpsControls.querySelectorAll('button').forEach(btn => {
+    btn.onclick = () => {
+      const choice = btn.getAttribute('data-choice');
+      fetch('/play-rps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choice })
+      })
+      .then(res => res.json())
+      .then(data => appendMessage('bot', data.response));
+    };
+  });
+
+  // Search
+  document.getElementById('runSearchBtn').onclick = () => {
+    const topic = document.getElementById('searchInput').value.trim();
+    if (!topic) return alert('Enter a topic.');
+    fetch('/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic })
+    })
+    .then(res => res.json())
+    .then(data => appendMessage('bot', data.response));
+  };
+
+  // Set Alarm
+  document.getElementById('runSetAlarmBtn').onclick = () => {
+    const minutes = parseInt(document.getElementById('alarmMinutes').value);
+    const message = document.getElementById('alarmMessage').value.trim();
+    if (!minutes || !message) return alert('Fill in both fields.');
+    fetch('/set-alarm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes, message })
+    })
+    .then(res => res.json())
+    .then(data => appendMessage('bot', data.response));
+  };
+
+  // Lie Detector
+  document.getElementById('runLieDetectorBtn').onclick = () => {
+    const val = document.getElementById('lieInput').value.trim();
+    try {
+      const messages = JSON.parse(val);
+      fetch('/lie-detector', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
+      })
+      .then(res => res.json())
+      .then(data => appendMessage('bot', JSON.stringify(data.response, null, 2)));
+    } catch {
+      alert("Invalid JSON format.");
+    }
+  };
+
+  hideAllControls(); // Hide on load
+</script>
+
+</body>
+</html>
