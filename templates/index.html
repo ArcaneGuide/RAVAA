@@ -86,26 +86,43 @@
   
 function speak(text) {
   const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'en-GB'; // British English
+  utter.lang = 'en-GB'; // Prioritize British English
+  utter.rate = 0.92;    // Slightly slower for natural flow
+  utter.pitch = 1.05;   // Slightly higher for warmth
+  utter.volume = 1;     // Full volume
 
   function setVoiceAndSpeak() {
     const voices = speechSynthesis.getVoices();
 
-    // Look for a British female voice
-    const britVoice = voices.find(voice =>
-      voice.lang === 'en-GB' &&
-      /female|woman|girl|karen|libby|serena|amy|emma|en-gb/i.test(voice.name)
+    // Look for a high-quality British female voice
+    const preferredVoices = [
+      'Google UK English Female',
+      'Google UK English',
+      'Google English (UK)', // Chromium voice options
+      'en-GB-Standard-A',     // Google Wavenet (where supported)
+      'Serena',
+      'Amy',
+      'Emma',
+      'Libby'
+    ];
+
+    const matchedVoice = voices.find(voice =>
+      voice.lang === 'en-GB' && preferredVoices.some(name => voice.name.includes(name))
     );
 
-    if (britVoice) {
-      utter.voice = britVoice;
+    if (matchedVoice) {
+      utter.voice = matchedVoice;
     } else {
-      console.warn("British feminine voice not found. Using default.");
+      console.warn("Preferred British female voice not found. Using default available voice.");
+      // Optional: Choose the first en-GB voice available
+      const fallback = voices.find(v => v.lang === 'en-GB');
+      if (fallback) utter.voice = fallback;
     }
 
     speechSynthesis.speak(utter);
   }
 
+  // Wait for voices to be loaded
   if (speechSynthesis.getVoices().length === 0) {
     speechSynthesis.onvoiceschanged = () => {
       setVoiceAndSpeak();
@@ -114,6 +131,37 @@ function speak(text) {
     setVoiceAndSpeak();
   }
 }
+
+function speakSmart(text) {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+
+  function speakNext(index = 0) {
+    if (index >= sentences.length) return;
+
+    const utter = new SpeechSynthesisUtterance(sentences[index].trim());
+    utter.lang = 'en-GB';
+    utter.rate = 0.92;
+    utter.pitch = 1.05;
+
+    utter.onend = () => {
+      setTimeout(() => speakNext(index + 1), 300); // Pause between sentences
+    };
+
+    const voices = speechSynthesis.getVoices();
+    utter.voice = voices.find(v => v.lang === 'en-GB' && v.name.includes('Google UK English Female')) ||
+                  voices.find(v => v.lang === 'en-GB');
+
+    speechSynthesis.speak(utter);
+  }
+
+  // Wait for voices
+  if (speechSynthesis.getVoices().length === 0) {
+    speechSynthesis.onvoiceschanged = () => speakNext();
+  } else {
+    speakNext();
+  }
+}
+
 
   function appendMessage(sender, text) {
     const p = document.createElement('p');
